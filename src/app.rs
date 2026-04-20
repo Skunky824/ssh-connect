@@ -24,6 +24,7 @@ pub async fn run(
     host: String,
     port: u16,
     identity: Option<String>,
+    strict_privacy: bool,
 ) -> Result<()> {
     // Get initial terminal size for the PTY
     let (cols, rows) = terminal::size()?;
@@ -41,6 +42,7 @@ pub async fn run(
         identity.as_deref(),
         pty_cols as u32,
         pty_rows as u32,
+        strict_privacy,
     )
     .await?;
 
@@ -59,7 +61,13 @@ pub async fn run(
     let mut browser = FileBrowser::new();
     let mut focus = Focus::Terminal;
     let mut show_sidebar = true;
-    let mut status_msg = format!("{}@{}:{}", user, host, port);
+    let mut status_msg = format!(
+        "{}@{}:{}  privacy:{}",
+        user,
+        host,
+        port,
+        if strict_privacy { "strict" } else { "relaxed" }
+    );
     let mut should_quit = false;
     let mut event_stream = EventStream::new();
 
@@ -268,10 +276,17 @@ async fn handle_key(
         }
         // F3: Re-inject CWD hook
         (_, KeyCode::F(3)) => {
-            *status_msg = format!(
-                "{}@{} — history-safe mode active (no remote hook injection)",
-                user, host
-            );
+            if ssh.strict_privacy() {
+                *status_msg = format!(
+                    "{}@{} — privacy:strict (helper shell commands are disabled)",
+                    user, host
+                );
+            } else {
+                *status_msg = format!(
+                    "{}@{} — privacy:relaxed (helper shell fallbacks enabled)",
+                    user, host
+                );
+            }
             return Ok(());
         }
         _ => {}

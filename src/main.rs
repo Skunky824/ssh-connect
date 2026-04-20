@@ -9,7 +9,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "ssh-connect", about = "SSH terminal with file browser")]
+#[command(
+    name = "ssh-connect",
+    about = "SSH terminal with file browser (strict privacy mode ON by default)"
+)]
 struct Args {
     /// Target in user@host format
     target: String,
@@ -21,16 +24,35 @@ struct Args {
     /// Path to identity file (private key)
     #[arg(short, long)]
     identity: Option<String>,
+
+    /// Strict privacy mode (default ON): never send helper shell commands.
+    #[arg(long, default_value_t = true)]
+    strict_privacy: bool,
+
+    /// Disable strict privacy mode (allows helper shell fallbacks when needed).
+    #[arg(long, conflicts_with = "strict_privacy")]
+    no_strict_privacy: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    let strict_privacy = if args.no_strict_privacy {
+        false
+    } else {
+        args.strict_privacy
+    };
 
     let (user, host) = parse_target(&args.target)
         .context("Target must be in user@host format")?;
 
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(app::run(user, host, args.port, args.identity))
+    rt.block_on(app::run(
+        user,
+        host,
+        args.port,
+        args.identity,
+        strict_privacy,
+    ))
 }
 
 fn parse_target(target: &str) -> Option<(String, String)> {

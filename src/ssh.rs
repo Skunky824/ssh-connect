@@ -24,6 +24,7 @@ pub struct SshSession {
     sftp: SftpSession,
     sudo_sftp: Mutex<Option<SftpSession>>,
     auth_password: Option<String>,
+    strict_privacy: bool,
 }
 
 struct Handler;
@@ -127,6 +128,7 @@ impl SshSession {
         identity: Option<&str>,
         cols: u32,
         rows: u32,
+        strict_privacy: bool,
     ) -> Result<Self> {
         let config = client::Config {
             ..Default::default()
@@ -232,7 +234,12 @@ impl SshSession {
             sftp,
             sudo_sftp: Mutex::new(None),
             auth_password,
+            strict_privacy,
         })
+    }
+
+    pub fn strict_privacy(&self) -> bool {
+        self.strict_privacy
     }
 
     /// Send bytes to the remote PTY.
@@ -394,6 +401,11 @@ impl SshSession {
     /// This is a fallback for cases where SFTP identity cannot write a path,
     /// but the current shell has elevated privileges (e.g. after `sudo -i`).
     pub async fn write_file_via_shell(&self, path: &str, data: &[u8]) -> Result<()> {
+        if self.strict_privacy {
+            anyhow::bail!(
+                "Shell write fallback blocked by strict privacy mode. Re-run with --no-strict-privacy to allow helper shell commands."
+            );
+        }
         let encoded = base64::engine::general_purpose::STANDARD.encode(data);
         let quoted_path = shell_quote(path);
         let cmd = format!(

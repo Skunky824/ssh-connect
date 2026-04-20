@@ -2,6 +2,13 @@
 
 A fast SSH terminal with a built-in remote file browser and local editor workflow.
 
+## Privacy Mode
+
+- Strict privacy is ON by default.
+- In strict mode, ssh-connect avoids sending helper shell commands to the remote host.
+- This reduces shell-history traces created by the tool itself.
+- If you explicitly want helper shell fallbacks, run with `--no-strict-privacy`.
+
 ## Why This Program Is Useful
 
 - Fast remote workflow in one TUI: terminal + file browser side-by-side.
@@ -43,6 +50,18 @@ cargo build --release
 Binary path:
 
 - `target\release\ssh-connect.exe`
+
+## Usage
+
+```powershell
+ssh-connect user@host
+```
+
+Disable strict privacy (optional):
+
+```powershell
+ssh-connect user@host --no-strict-privacy
+```
 
 ## Installer (.exe)
 
