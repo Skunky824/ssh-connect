@@ -1,0 +1,26 @@
+[package]
+name = "ssh-connect"
+version = "0.1.0"
+edition = "2021"
+description = "SSH terminal with integrated file browser"
+
+[dependencies]
+russh = "0.46"
+russh-keys = "0.46"
+russh-sftp = "2.0"
+async-trait = "0.1"
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+tokio = { version = "1", features = ["full"] }
+vte = "0.13"
+anyhow = "1"
+dirs = "6"
+tempfile = "3"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+log = "0.4"
+base64 = "0.22"
+
+[profile.release]
+opt-level = 3
+strip = true

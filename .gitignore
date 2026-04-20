@@ -1,0 +1,8 @@
+target/
+*.log
+stderr.log
+stdout.log
+build*.log
+*.tmp
+.DS_Store
+Thumbs.db
