@@ -127,6 +127,35 @@ impl FileBrowser {
         }
     }
 
+    /// Jump selection to first entry.
+    pub fn select_home(&mut self) {
+        self.selected = 0;
+    }
+
+    /// Jump selection to last entry.
+    pub fn select_end(&mut self) {
+        if !self.entries.is_empty() {
+            self.selected = self.entries.len() - 1;
+        }
+    }
+
+    /// Move selection up by approximately one page.
+    pub fn page_up(&mut self, page_size: usize) {
+        if page_size == 0 {
+            return;
+        }
+        self.selected = self.selected.saturating_sub(page_size);
+    }
+
+    /// Move selection down by approximately one page.
+    pub fn page_down(&mut self, page_size: usize) {
+        if page_size == 0 || self.entries.is_empty() {
+            return;
+        }
+        let last = self.entries.len() - 1;
+        self.selected = (self.selected + page_size).min(last);
+    }
+
     /// Get the currently selected entry.
     pub fn selected_entry(&self) -> Option<&DirEntry> {
         self.entries.get(self.selected)

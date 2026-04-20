@@ -308,6 +308,22 @@ async fn handle_sidebar_key(
         KeyCode::Char('/') => {
             browser.start_search();
         }
+        KeyCode::Home => {
+            browser.select_home();
+        }
+        KeyCode::End => {
+            browser.select_end();
+        }
+        KeyCode::PageUp => {
+            let (_, rows) = terminal::size()?;
+            let page = rows.saturating_sub(3) as usize;
+            browser.page_up(page.max(1));
+        }
+        KeyCode::PageDown => {
+            let (_, rows) = terminal::size()?;
+            let page = rows.saturating_sub(3) as usize;
+            browser.page_down(page.max(1));
+        }
         KeyCode::Up | KeyCode::Char('k') => {
             browser.select_up();
         }

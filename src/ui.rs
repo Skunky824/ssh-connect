@@ -208,7 +208,7 @@ fn draw_status_bar(f: &mut Frame, area: Rect, msg: &str, focus: Focus) {
         Focus::Terminal => "[TERMINAL]",
     };
 
-    let help = " F2:sidebar  F3:history-safe  Ctrl+B:focus  /|Ctrl+F:search  Wheel:scroll files  Ctrl+Q:quit";
+    let help = " F2:sidebar  F3:history-safe  Ctrl+B:focus  /|Ctrl+F:search  Home/End PgUp/PgDn  Wheel:scroll  Ctrl+Q:quit";
 
     let line = Line::from(vec![
         Span::styled(
