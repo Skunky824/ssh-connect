@@ -52,6 +52,7 @@ pub struct Grid {
     pub cells: Vec<Vec<Cell>>,
     pub rows: usize,
     pub cols: usize,
+    storage_cols: usize,
     pub cursor_row: usize,
     pub cursor_col: usize,
     saved_cursor: Option<(usize, usize)>,
@@ -111,6 +112,7 @@ impl Grid {
             cells: vec![vec![Cell::default(); cols]; rows],
             rows,
             cols,
+            storage_cols: cols,
             cursor_row: 0,
             cursor_col: 0,
             saved_cursor: None,
@@ -125,9 +127,10 @@ impl Grid {
     }
 
     fn resize(&mut self, rows: usize, cols: usize) {
-        let mut new_cells = vec![vec![Cell::default(); cols]; rows];
+        let new_storage_cols = self.storage_cols.max(cols);
+        let mut new_cells = vec![vec![Cell::default(); new_storage_cols]; rows];
         let copy_rows = rows.min(self.rows);
-        let copy_cols = cols.min(self.cols);
+        let copy_cols = new_storage_cols.min(self.storage_cols);
         for r in 0..copy_rows {
             for c in 0..copy_cols {
                 new_cells[r][c] = self.cells[r][c].clone();
@@ -136,6 +139,7 @@ impl Grid {
         self.cells = new_cells;
         self.rows = rows;
         self.cols = cols;
+        self.storage_cols = new_storage_cols;
         self.scroll_top = 0;
         self.scroll_bottom = rows.saturating_sub(1);
         self.cursor_row = self.cursor_row.min(rows.saturating_sub(1));
@@ -145,7 +149,11 @@ impl Grid {
     fn detect_cwd_from_prompt(&self) -> Option<String> {
         // Scan from bottom to top for the most recent shell-like prompt.
         for row in (0..self.rows).rev() {
-            let line: String = self.cells[row].iter().map(|cell| cell.c).collect();
+            let line: String = self.cells[row]
+                .iter()
+                .take(self.cols)
+                .map(|cell| cell.c)
+                .collect();
             if let Some(path) = parse_prompt_cwd(line.trim()) {
                 return Some(path);
             }
@@ -157,7 +165,7 @@ impl Grid {
         if self.scroll_top < self.scroll_bottom && self.scroll_bottom < self.rows {
             self.cells.remove(self.scroll_top);
             self.cells
-                .insert(self.scroll_bottom, vec![Cell::default(); self.cols]);
+                .insert(self.scroll_bottom, vec![Cell::default(); self.storage_cols]);
         }
     }
 
@@ -165,7 +173,7 @@ impl Grid {
         if self.scroll_top < self.scroll_bottom && self.scroll_bottom < self.rows {
             self.cells.remove(self.scroll_bottom);
             self.cells
-                .insert(self.scroll_top, vec![Cell::default(); self.cols]);
+                .insert(self.scroll_top, vec![Cell::default(); self.storage_cols]);
         }
     }
 
@@ -196,7 +204,7 @@ impl Grid {
         let cursor = (self.cursor_row, self.cursor_col);
         self.alt_cells = Some(saved);
         self.alt_cursor = Some(cursor);
-        self.cells = vec![vec![Cell::default(); self.cols]; self.rows];
+        self.cells = vec![vec![Cell::default(); self.storage_cols]; self.rows];
         self.cursor_row = 0;
         self.cursor_col = 0;
     }
@@ -456,7 +464,7 @@ impl vte::Perform for Grid {
                     if self.cursor_row <= self.scroll_bottom {
                         self.cells.remove(self.scroll_bottom);
                         self.cells
-                            .insert(self.cursor_row, vec![Cell::default(); self.cols]);
+                            .insert(self.cursor_row, vec![Cell::default(); self.storage_cols]);
                     }
                 }
             }
@@ -467,7 +475,7 @@ impl vte::Perform for Grid {
                     if self.cursor_row <= self.scroll_bottom {
                         self.cells.remove(self.cursor_row);
                         self.cells
-                            .insert(self.scroll_bottom, vec![Cell::default(); self.cols]);
+                            .insert(self.scroll_bottom, vec![Cell::default(); self.storage_cols]);
                     }
                 }
             }
@@ -491,7 +499,7 @@ impl vte::Perform for Grid {
                 for _ in 0..n {
                     if col < self.cols {
                         self.cells[row].insert(col, Cell::default());
-                        self.cells[row].truncate(self.cols);
+                        self.cells[row].truncate(self.storage_cols);
                     }
                 }
             }
