@@ -91,7 +91,7 @@ pub async fn run(
             let vref = &vterm;
             let smsg = &status_msg;
             terminal.draw(|f| {
-                ui::render(f, bref, vref, focus, show_sidebar, smsg, zoom);
+                ui::render(f, bref, vref, focus, show_sidebar, smsg);
             })?;
         }
 
