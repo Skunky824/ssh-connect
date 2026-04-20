@@ -260,19 +260,9 @@ impl SshSession {
 
     /// Inject the CWD-tracking shell hook into the current remote shell.
     pub async fn inject_cwd_hook(&self) -> Result<()> {
-        // Works for bash and zsh. Wrapped to suppress echo:
-        // 1. Send the hook definition
-        // 2. Then clear the screen lines to hide the noise
-        let hook = concat!(
-            r#" if [ -n "$ZSH_VERSION" ]; then "#,
-            r#"precmd() { printf '\033]7;%s\033\\' "$PWD"; }; "#,
-            r#"elif [ -n "$BASH_VERSION" ]; then "#,
-            r#"PROMPT_COMMAND='printf "\\033]7;%s\\033\\\\" $PWD'"#,
-            r#"; fi"#,
-            "\n",
-            "clear\n"
-        );
-        self.send_bytes(hook.as_bytes()).await
+        // History-safe mode: do not inject shell commands on the remote host.
+        // CWD tracking relies on prompt parsing plus OSC 7 when already present.
+        Ok(())
     }
 
     // ---- SFTP operations ----

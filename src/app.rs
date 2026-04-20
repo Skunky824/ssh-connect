@@ -5,7 +5,8 @@ use crate::ui::{self, Focus};
 use crate::vterm::VTerm;
 use anyhow::Result;
 use crossterm::event::{
-    Event, EventStream, KeyCode, KeyEvent, KeyModifiers,
+    DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode,
+    KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use crossterm::terminal::{
     self, EnterAlternateScreen, LeaveAlternateScreen,
@@ -43,13 +44,11 @@ pub async fn run(
     )
     .await?;
 
-    // Inject CWD hook
-    ssh.inject_cwd_hook().await?;
-
     // Enter TUI mode
     let mut stdout = io::stdout();
     terminal::enable_raw_mode()?;
     stdout.execute(EnterAlternateScreen)?;
+    stdout.execute(EnableMouseCapture)?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -66,6 +65,13 @@ pub async fn run(
 
     // Main event loop
     loop {
+        // Keep current selection visible in sidebar.
+        if show_sidebar {
+            let (_, rows) = terminal::size()?;
+            let visible_height = rows.saturating_sub(3) as usize;
+            browser.adjust_scroll(visible_height);
+        }
+
         // Refresh browser if needed
         if browser.needs_refresh {
             browser.refresh(&ssh).await;
@@ -148,6 +154,9 @@ pub async fn run(
                             vterm.resize(pty_rows as usize, pty_cols as usize);
                             ssh.resize(pty_cols as u32, pty_rows as u32).await?;
                         }
+                        Event::Mouse(mouse) => {
+                            handle_mouse(mouse, &mut focus, show_sidebar, &mut browser)?;
+                        }
                         _ => {}
                     }
                 }
@@ -157,8 +166,49 @@ pub async fn run(
 
     // Cleanup
     terminal::disable_raw_mode()?;
+    io::stdout().execute(DisableMouseCapture)?;
     io::stdout().execute(LeaveAlternateScreen)?;
     println!("Disconnected.");
+    Ok(())
+}
+
+fn handle_mouse(
+    mouse: MouseEvent,
+    focus: &mut Focus,
+    show_sidebar: bool,
+    browser: &mut FileBrowser,
+) -> Result<()> {
+    if !show_sidebar {
+        return Ok(());
+    }
+
+    let (cols, rows) = terminal::size()?;
+    let status_row = rows.saturating_sub(1);
+    if mouse.row >= status_row {
+        return Ok(());
+    }
+
+    // Sidebar occupies the first 30 columns when visible.
+    let in_sidebar = mouse.column < 30;
+
+    match mouse.kind {
+        MouseEventKind::ScrollUp if in_sidebar => {
+            *focus = Focus::Sidebar;
+            browser.select_up();
+        }
+        MouseEventKind::ScrollDown if in_sidebar => {
+            *focus = Focus::Sidebar;
+            browser.select_down();
+        }
+        MouseEventKind::Down(MouseButton::Left) if in_sidebar => {
+            *focus = Focus::Sidebar;
+        }
+        MouseEventKind::Down(MouseButton::Left) if mouse.column < cols => {
+            *focus = Focus::Terminal;
+        }
+        _ => {}
+    }
+
     Ok(())
 }
 
@@ -218,8 +268,10 @@ async fn handle_key(
         }
         // F3: Re-inject CWD hook
         (_, KeyCode::F(3)) => {
-            ssh.inject_cwd_hook().await?;
-            *status_msg = format!("{}@{} — CWD hook re-injected", user, host);
+            *status_msg = format!(
+                "{}@{} — history-safe mode active (no remote hook injection)",
+                user, host
+            );
             return Ok(());
         }
         _ => {}
