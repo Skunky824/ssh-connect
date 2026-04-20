@@ -23,12 +23,14 @@ SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 PrivilegesRequired=lowest
+ChangesEnvironment=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
+Name: "addtopath"; Description: "Add ssh-connect to PATH"; GroupDescription: "Additional tasks:"; Flags: checkedonce
 
 [Files]
 Source: "..\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -41,3 +43,20 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+
+[Registry]
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}')); Tasks: addtopath
+
+[Code]
+function NeedsAddPath(PathToAdd: string): Boolean;
+var
+	CurrentPath: string;
+	Needle: string;
+begin
+	Result := True;
+	if not RegQueryStringValue(HKCU, 'Environment', 'Path', CurrentPath) then
+		Exit;
+
+	Needle := ';' + Lowercase(PathToAdd) + ';';
+	Result := Pos(Needle, ';' + Lowercase(CurrentPath) + ';') = 0;
+end;

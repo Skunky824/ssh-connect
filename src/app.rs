@@ -28,10 +28,10 @@ pub async fn run(
 ) -> Result<()> {
     // Get initial terminal size for the PTY
     let (cols, rows) = terminal::size()?;
+    let mut zoom: u16 = 1;
 
-    // Reserve space: 2 rows for borders, 1 for status bar, 30 cols for sidebar + border
-    let pty_cols = cols.saturating_sub(33);
-    let pty_rows = rows.saturating_sub(3);
+    // Reserve space: 2 rows for borders, 1 for status bar, 30 cols for sidebar + border.
+    let (pty_cols, pty_rows) = compute_pty_size(cols, rows, true, zoom);
 
     eprintln!("Connecting to {}@{}:{}...", user, host, port);
 
@@ -91,7 +91,7 @@ pub async fn run(
             let vref = &vterm;
             let smsg = &status_msg;
             terminal.draw(|f| {
-                ui::render(f, bref, vref, focus, show_sidebar, smsg);
+                ui::render(f, bref, vref, focus, show_sidebar, smsg, zoom);
             })?;
         }
 
@@ -149,21 +149,26 @@ pub async fn run(
                                 &mut status_msg,
                                 &user,
                                 &host,
+                                zoom,
                             )
                             .await?;
                         }
                         Event::Resize(new_cols, new_rows) => {
-                            let pty_cols = if show_sidebar {
-                                new_cols.saturating_sub(33)
-                            } else {
-                                new_cols.saturating_sub(3)
-                            };
-                            let pty_rows = new_rows.saturating_sub(3);
+                            let (pty_cols, pty_rows) = compute_pty_size(new_cols, new_rows, show_sidebar, zoom);
                             vterm.resize(pty_rows as usize, pty_cols as usize);
                             ssh.resize(pty_cols as u32, pty_rows as u32).await?;
                         }
                         Event::Mouse(mouse) => {
-                            handle_mouse(mouse, &mut focus, show_sidebar, &mut browser)?;
+                            handle_mouse(
+                                mouse,
+                                &mut focus,
+                                show_sidebar,
+                                &mut browser,
+                                &mut vterm,
+                                &ssh,
+                                &mut zoom,
+                            )
+                            .await?;
                         }
                         _ => {}
                     }
@@ -180,19 +185,54 @@ pub async fn run(
     Ok(())
 }
 
-fn handle_mouse(
+fn compute_pty_size(
+    total_cols: u16,
+    total_rows: u16,
+    show_sidebar: bool,
+    zoom: u16,
+) -> (u16, u16) {
+    let pane_cols = if show_sidebar {
+        total_cols.saturating_sub(33)
+    } else {
+        total_cols.saturating_sub(3)
+    };
+    let pane_rows = total_rows.saturating_sub(3);
+    let z = zoom.max(1);
+    ((pane_cols / z).max(1), (pane_rows / z).max(1))
+}
+
+async fn handle_mouse(
     mouse: MouseEvent,
     focus: &mut Focus,
     show_sidebar: bool,
     browser: &mut FileBrowser,
+    vterm: &mut VTerm,
+    ssh: &SshSession,
+    zoom: &mut u16,
 ) -> Result<()> {
-    if !show_sidebar {
-        return Ok(());
-    }
-
     let (cols, rows) = terminal::size()?;
     let status_row = rows.saturating_sub(1);
     if mouse.row >= status_row {
+        return Ok(());
+    }
+
+    if mouse.modifiers.contains(KeyModifiers::CONTROL) {
+        let old_zoom = *zoom;
+        match mouse.kind {
+            MouseEventKind::ScrollUp => *zoom = zoom.saturating_add(1).min(4),
+            MouseEventKind::ScrollDown => *zoom = zoom.saturating_sub(1).max(1),
+            _ => {}
+        }
+
+        if *zoom != old_zoom {
+            let (pty_cols, pty_rows) = compute_pty_size(cols, rows, show_sidebar, *zoom);
+            vterm.resize(pty_rows as usize, pty_cols as usize);
+            ssh.resize(pty_cols as u32, pty_rows as u32).await?;
+        }
+        return Ok(());
+    }
+
+    if !show_sidebar {
         return Ok(());
     }
 
@@ -232,6 +272,7 @@ async fn handle_key(
     status_msg: &mut String,
     user: &str,
     host: &str,
+    zoom: u16,
 ) -> Result<()> {
     // Filter out release events on Windows (events fire twice: press + release)
     if key.kind != crossterm::event::KeyEventKind::Press {
@@ -264,12 +305,7 @@ async fn handle_key(
             *show_sidebar = !*show_sidebar;
             // Resize PTY when sidebar toggles
             let (cols, rows) = terminal::size()?;
-            let pty_cols = if *show_sidebar {
-                cols.saturating_sub(33)
-            } else {
-                cols.saturating_sub(3)
-            };
-            let pty_rows = rows.saturating_sub(3);
+            let (pty_cols, pty_rows) = compute_pty_size(cols, rows, *show_sidebar, zoom);
             vterm.resize(pty_rows as usize, pty_cols as usize);
             ssh.resize(pty_cols as u32, pty_rows as u32).await?;
             return Ok(());

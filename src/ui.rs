@@ -21,6 +21,7 @@ pub fn render(
     focus: Focus,
     show_sidebar: bool,
     status_msg: &str,
+    zoom: u16,
 ) {
     let area = f.area();
 
@@ -50,7 +51,7 @@ pub fn render(
     }
 
     // Draw terminal
-    draw_terminal(f, terminal_area, vterm, focus == Focus::Terminal);
+    draw_terminal(f, terminal_area, vterm, focus == Focus::Terminal, zoom);
 
     // Draw status bar
     draw_status_bar(f, status_area, status_msg, focus);
@@ -125,7 +126,7 @@ fn draw_sidebar(f: &mut Frame, area: Rect, browser: &FileBrowser, focused: bool)
     }
 }
 
-fn draw_terminal(f: &mut Frame, area: Rect, vterm: &VTerm, focused: bool) {
+fn draw_terminal(f: &mut Frame, area: Rect, vterm: &VTerm, focused: bool, zoom: u16) {
     let border_style = if focused {
         Style::default().fg(Color::Green)
     } else {
@@ -141,8 +142,9 @@ fn draw_terminal(f: &mut Frame, area: Rect, vterm: &VTerm, focused: bool) {
     f.render_widget(block, area);
 
     let grid = &vterm.grid;
-    let display_rows = (inner.height as usize).min(grid.rows);
-    let display_cols = (inner.width as usize).min(grid.cols);
+    let z = zoom.max(1) as usize;
+    let display_rows = ((inner.height as usize) / z).min(grid.rows);
+    let display_cols = ((inner.width as usize) / z).min(grid.cols);
 
     for row in 0..display_rows {
         let mut spans: Vec<Span> = Vec::new();
@@ -159,22 +161,31 @@ fn draw_terminal(f: &mut Frame, area: Rect, vterm: &VTerm, focused: bool) {
                 if cell_to_style(&c.attr) != style {
                     break;
                 }
-                text.push(c.c);
+                for _ in 0..z {
+                    text.push(c.c);
+                }
                 col += 1;
             }
             spans.push(Span::styled(text, style));
         }
 
         let line = Line::from(spans);
-        let line_area = Rect::new(inner.x, inner.y + row as u16, inner.width, 1);
-        f.render_widget(Paragraph::new(line), line_area);
+        let base_y = inner.y + (row * z) as u16;
+        for zr in 0..z {
+            let y = base_y + zr as u16;
+            if y >= inner.y + inner.height {
+                break;
+            }
+            let line_area = Rect::new(inner.x, y, inner.width, 1);
+            f.render_widget(Paragraph::new(line.clone()), line_area);
+        }
     }
 
     // Draw cursor
     if grid.cursor_row < display_rows && grid.cursor_col < display_cols {
         f.set_cursor_position((
-            inner.x + grid.cursor_col as u16,
-            inner.y + grid.cursor_row as u16,
+            inner.x + (grid.cursor_col * z) as u16,
+            inner.y + (grid.cursor_row * z) as u16,
         ));
     }
 }
@@ -208,7 +219,7 @@ fn draw_status_bar(f: &mut Frame, area: Rect, msg: &str, focus: Focus) {
         Focus::Terminal => "[TERMINAL]",
     };
 
-    let help = " F2:sidebar  F3:history-safe  Ctrl+B:focus  /|Ctrl+F:search  Home/End PgUp/PgDn  Wheel:scroll  Ctrl+Q:quit";
+    let help = " F2:sidebar  F3:history-safe  Ctrl+B:focus  /|Ctrl+F:search  Home/End PgUp/PgDn  Wheel:scroll  Ctrl+Wheel:zoom  Ctrl+Q:quit";
 
     let line = Line::from(vec![
         Span::styled(

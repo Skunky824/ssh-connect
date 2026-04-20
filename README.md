@@ -16,6 +16,7 @@ A fast SSH terminal with a built-in remote file browser and local editor workflo
 - Root-friendly operations: handles protected paths with privileged fallbacks when available.
 - External local editing: open remote files in your local editor and sync changes back.
 - Keyboard-driven UX: tmux-like pane switching (`Ctrl+B`) and vim-like browser search (`/` or `Ctrl+F`).
+- Terminal zoom support with `Ctrl+Mouse Wheel`.
 - Cross-platform runtime: works on Windows, Linux, and macOS (built with Rust).
 
 ## Core Features
@@ -39,6 +40,9 @@ A fast SSH terminal with a built-in remote file browser and local editor workflo
   - `Backspace` or `Left`: Go parent directory
   - `r`: Refresh listing
   - `/` or `Ctrl+F`: Start incremental search
+  - `Home` / `End`: Jump to first/last item
+  - `PageUp` / `PageDown`: Move by one page
+  - `Ctrl+Mouse Wheel`: Zoom in/out terminal pane
   - Search mode: type to search, `Backspace` delete char, `Enter` accept, `Esc` cancel
 
 ## Build
@@ -78,6 +82,10 @@ Build installer with:
 Output installer:
 
 - `dist\ssh-connect-setup.exe`
+
+Installer behavior:
+
+- Adds `ssh-connect` install directory to the current user `PATH` (default enabled in installer tasks).
 
 ## License
 
